@@ -11,7 +11,7 @@ for i in range(1, 30, 2):
 	for line in lines:
 		time, tp = line.split('; ')
 		tp_x_bbr.append(float(time))
-		tp_y_bbr.append(float(tp))
+		tp_y_bbr.append(float(tp) * 8.0)
 
 	#read data for BBR RTT
 	rtt_x_bbr = []
@@ -32,7 +32,7 @@ for i in range(1, 30, 2):
 	for line in lines:
 		time, tp = line.split('; ')
 		tp_x_siad.append(float(time))
-		tp_y_siad.append(float(tp))
+		tp_y_siad.append(float(tp) * 8.0)
 
 	#read data for SIAD RTT
 	rtt_x_siad = []
