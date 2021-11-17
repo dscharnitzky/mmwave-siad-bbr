@@ -6,7 +6,7 @@ for i in range(1, 30, 2):
 	#read data for BBR throughput
 	tp_x_bbr = []
 	tp_y_bbr = []
-	f = open('%s/processedwindow.txt' % i, 'r')
+	f = open('../traces/%s/processedwindow.txt' % i, 'r')
 	lines = f.readlines()
 	for line in lines:
 		time, tp = line.split('; ')
@@ -16,7 +16,7 @@ for i in range(1, 30, 2):
 	#read data for BBR RTT
 	rtt_x_bbr = []
 	rtt_y_bbr = []
-	f = open('%s/mmWave-tcp-rtt0.txt' % i, 'r')
+	f = open('../traces/%s/mmWave-tcp-rtt0.txt' % i, 'r')
 	lines = f.readlines()
 	for line in lines:
 		time, rtt0, rtt1 = line.split('\t')
@@ -27,7 +27,7 @@ for i in range(1, 30, 2):
 	tp_x_siad = []
 	tp_y_siad = []
 	j = i + 1 
-	f = open('%s/processedwindow.txt' % j, 'r')
+	f = open('../traces/%s/processedwindow.txt' % j, 'r')
 	lines = f.readlines()
 	for line in lines:
 		time, tp = line.split('; ')
@@ -37,7 +37,7 @@ for i in range(1, 30, 2):
 	#read data for SIAD RTT
 	rtt_x_siad = []
 	rtt_y_siad = []
-	f = open('%s/mmWave-tcp-rtt0.txt' % j, 'r')
+	f = open('../traces/%s/mmWave-tcp-rtt0.txt' % j, 'r')
 	lines = f.readlines()
 	for line in lines:
 		time, rtt0, rtt1 = line.split('\t')
@@ -63,5 +63,5 @@ for i in range(1, 30, 2):
 	fig.legend(loc="upper right")
 	plt.subplots_adjust(top = 0.88)
 
-	plt.savefig('%s.png' % i, bbox_inches='tight', dpi=300)
+	plt.savefig('../traces/%s.png' % i, bbox_inches='tight', dpi=300)
 
