@@ -4,7 +4,7 @@ We have added the Internet module from ns3 3.35 version, added TCP SIAD and some
 
 ## Configure and Compile
   
-  /waf configure --build-profile=optimized --disable-python --enable-example --disable-werror && ./waf build
+  ./waf configure --build-profile=optimized --disable-python --enable-example --disable-werror && ./waf build
 
 
 Original Readme:
