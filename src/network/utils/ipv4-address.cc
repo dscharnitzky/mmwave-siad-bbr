@@ -199,16 +199,18 @@ Ipv4Mask::GetPrefixLength (void) const
 
 
 Ipv4Address::Ipv4Address ()
-  : m_address (0x66666666)
+  : m_address (0x66666666), m_initialized(false)
 {
   NS_LOG_FUNCTION (this);
 }
 Ipv4Address::Ipv4Address (uint32_t address)
+  : m_initialized(true)
 {
   NS_LOG_FUNCTION (this << address);
   m_address = address;
 }
 Ipv4Address::Ipv4Address (char const *address)
+  : m_initialized(true)
 {
   NS_LOG_FUNCTION (this << address);
   m_address = AsciiToIpv4Host (address);
@@ -225,12 +227,14 @@ Ipv4Address::Set (uint32_t address)
 {
   NS_LOG_FUNCTION (this << address);
   m_address = address;
+  m_initialized = true;
 }
 void
 Ipv4Address::Set (char const *address)
 {
   NS_LOG_FUNCTION (this << address);
   m_address = AsciiToIpv4Host (address);
+  m_initialized = true;
 }
 
 Ipv4Address
@@ -326,6 +330,7 @@ Ipv4Address::Deserialize (const uint8_t buf[4])
   ipv4.m_address |= buf[2];
   ipv4.m_address <<= 8;
   ipv4.m_address |= buf[3];
+  ipv4.m_initialized = true;
   return ipv4;
 }
 
@@ -404,6 +409,11 @@ Ipv4Address::GetLoopback (void)
   NS_LOG_FUNCTION_NOARGS ();
   Ipv4Address loopback ("127.0.0.1");
   return loopback;
+}
+
+bool Ipv4Address::IsInitialized()
+{
+  return m_initialized;
 }
 
 size_t Ipv4AddressHash::operator() (Ipv4Address const &x) const

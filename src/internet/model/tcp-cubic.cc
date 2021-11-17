@@ -41,7 +41,7 @@ TcpCubic::GetTypeId (void)
                    MakeBooleanAccessor (&TcpCubic::m_fastConvergence),
                    MakeBooleanChecker ())
     .AddAttribute ("Beta", "Beta for multiplicative decrease",
-                   DoubleValue (0.8),
+                   DoubleValue (0.7),
                    MakeDoubleAccessor (&TcpCubic::m_beta),
                    MakeDoubleChecker <double> (0.0))
     .AddAttribute ("HyStart", "Enable (true) or disable (false) hybrid slow start algorithm",
@@ -172,8 +172,16 @@ TcpCubic::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
           HystartReset (tcb);
         }
 
-      tcb->m_cWnd += tcb->m_segmentSize;
-      segmentsAcked -= 1;
+      // In Linux, the QUICKACK socket option enables the receiver to send
+      // immediate acks initially (during slow start) and then transition
+      // to delayed acks.  ns-3 does not implement QUICKACK, and if ack
+      // counting instead of byte counting is used during slow start window
+      // growth, when TcpSocket::DelAckCount==2, then the slow start will
+      // not reach as large of an initial window as in Linux.  Therefore,
+      // we can approximate the effect of QUICKACK by making this slow
+      // start phase perform Appropriate Byte Counting (RFC 3465)
+      tcb->m_cWnd += segmentsAcked * tcb->m_segmentSize;
+      segmentsAcked = 0;
 
       NS_LOG_INFO ("In SlowStart, updated to cwnd " << tcb->m_cWnd <<
                    " ssthresh " << tcb->m_ssThresh);
@@ -389,16 +397,13 @@ TcpCubic::GetSsThresh (Ptr<const TcpSocketState> tcb, uint32_t bytesInFlight)
 {
   NS_LOG_FUNCTION (this << tcb << bytesInFlight);
 
-  // Without inflation and deflation, these two are the same
-  uint32_t segInFlight = bytesInFlight / tcb->m_segmentSize;
   uint32_t segCwnd = tcb->GetCwndInSegments ();
-  NS_LOG_DEBUG ("Loss at cWnd=" << segCwnd << " in flight=" << segInFlight);
+  NS_LOG_DEBUG ("Loss at cWnd=" << segCwnd << " segments in flight=" << bytesInFlight / tcb->m_segmentSize);
 
   /* Wmax and fast convergence */
   if (segCwnd < m_lastMaxCwnd && m_fastConvergence)
     {
-      //m_lastMaxCwnd = m_beta * segCwnd;
-	  m_lastMaxCwnd = (1+m_beta) * segCwnd/2; //by zml
+      m_lastMaxCwnd = (segCwnd * (1 + m_beta)) / 2; // Section 4.6 in RFC 8312
     }
   else
     {
@@ -408,10 +413,9 @@ TcpCubic::GetSsThresh (Ptr<const TcpSocketState> tcb, uint32_t bytesInFlight)
   m_epochStart = Time::Min ();    // end of epoch
 
   /* Formula taken from the Linux kernel */
+  uint32_t ssThresh = std::max (static_cast<uint32_t> (segCwnd * m_beta ), 2U) * tcb->m_segmentSize;
 
-  //uint32_t ssThresh = std::max (static_cast<uint32_t> (segInFlight * m_beta ), 2U) * tcb->m_segmentSize;
-  uint32_t temp = std::min (segCwnd, segInFlight);
-  uint32_t ssThresh = std::max (static_cast<uint32_t> (temp * m_beta ), 2U) * tcb->m_segmentSize;
+  NS_LOG_DEBUG ("SsThresh = " << ssThresh);
 
   return ssThresh;
 }

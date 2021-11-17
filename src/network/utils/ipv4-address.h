@@ -200,6 +200,8 @@ public:
    */
   static Ipv4Address GetLoopback (void);
 
+  bool IsInitialized ();
+
 private:
 
   /**
@@ -242,6 +244,8 @@ private:
    * \returns true if the first operand is less than the second.
    */
   friend bool operator < (Ipv4Address const &a, Ipv4Address const &b);
+
+  bool m_initialized;
 };
 
 /**
