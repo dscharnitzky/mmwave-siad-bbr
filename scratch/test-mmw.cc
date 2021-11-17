@@ -18,7 +18,6 @@
 using namespace ns3;
 using namespace mmwave;
 
-//#define DCE_NS3 1         // Define if DCE is available
 #define SCRIPT_SECTION 1  // Used to make sections collapsible 
 
 //======================================================================
@@ -313,7 +312,6 @@ typedef struct ScriptConfig {
   uint32_t m_run;
   uint32_t m_symPerSf;
   uint32_t m_rlcBufSize;
-  bool m_useDce;
   bool m_rlcAmEnabled;
   bool m_harqEnabled;
   bool m_fixedTti;
@@ -347,7 +345,6 @@ void ParseArgs (ScriptConfig *c, int argc, char *argv[]) {
   c->m_seed = 2;
   c->m_run = 0;
   c->m_symPerSf = 24;
-  c->m_useDce = true;
   c->m_harqEnabled = true;
   c->m_rlcAmEnabled = true;
   c->m_fixedTti = false;
@@ -359,7 +356,6 @@ void ParseArgs (ScriptConfig *c, int argc, char *argv[]) {
   
   CommandLine cmd;
   cmd.AddValue ("name", "Name used for tracing", c->m_simName);
-  cmd.AddValue ("dce", "Set to true to use DCE", c->m_useDce);
   cmd.AddValue ("time", "Total duration of the simulation [s])", c->m_simTime);
   cmd.AddValue ("numEnb", "Number of eNBs", c->m_numEnb);
   cmd.AddValue ("numUe", "Number of UEs per eNB", c->m_numUe);
@@ -381,7 +377,6 @@ void ParseArgs (ScriptConfig *c, int argc, char *argv[]) {
   
   LogHeader ("Program arguments parsed");
   LogParam ("Simulation name", c->m_simName);
-  LogParam ("Use DCE", c->m_useDce);
   LogParam ("Duration", c->m_simTime);
   LogParam ("End-to-end", c->m_e2eProt);
 }
@@ -389,7 +384,7 @@ void ParseArgs (ScriptConfig *c, int argc, char *argv[]) {
 void SetDefault (const ScriptConfig &c) {
 
   //TCP
-  Config::SetDefault ("ns3::TcpL4Protocol::SocketType", TypeIdValue (TypeId::LookupByName ("ns3::TcpBbr")));
+  Config::SetDefault ("ns3::TcpL4Protocol::SocketType", TypeIdValue (TypeId::LookupByName ("ns3::" + c.cc_prot)));
   Config::SetDefault ("ns3::TcpSocketBase::MinRto", TimeValue (MilliSeconds (1000)));
   //Config::SetDefault ("ns3::Ipv4L3Protocol::FragmentExpirationTimeout", TimeValue (Seconds (0.2)));
   Config::SetDefault ("ns3::TcpSocket::SegmentSize", UintegerValue (10000));
@@ -729,198 +724,6 @@ void TraceMmwEnb (ScriptConfig& c, Ptr<NetDevice> dev, std::string id) {
 #endif //===> End of trace section <====================================
 
 //======================================================================
-//===> DCE section <====================================================
-
-#ifdef DCE_NS3
-
-#include "ns3/dce-module.h"
-
-std::string LoadPrefix () {
-  std::string prefix;
-  char user[40];
-  char* userPtr = user;
-  userPtr = getenv("USER");
-  prefix = "/home/";
-  prefix += userPtr;
-  prefix += "/work/";
-  return prefix;
-}
-
-std::string GetDceLibrary () {
-  return "liblinux.so";
-}
-
-std::string GetDceRefLibrary () {
-  return "liblinux_ref.so";
-}
-
-void SetupDcePaths () {
-  #ifdef KERNEL_STACK
-  #else
-    cout << "*** Linux kernel stack is not available!" << endl;
-    cout << "    Build with dce-linux module ... \n\n" << endl;
-    exit (0);
-  #endif
-	
-  uint16_t status1 = 0, status2 = 0;
-  std::string path, cmd, netNextLib, absPath = LoadPrefix ();
-  path = absPath + "net-next-sim";
-  cmd = absPath + "ns3-dce-mmw/bld/build/bin_dce:";
-  cmd += path;
-  status1 = setenv ("DCE_ROOT", cmd.c_str (), 1);
-  status2 = setenv ("DCE_PATH", cmd.c_str (), 1);
-  
-  LogHeader ("Initial path setup");
-  LogParam ("Command", cmd);
-  LogParam ("DCE_ROOT setenv status", status1);
-  LogParam ("DCE_PATH setenv status", status2);
-}
-
-void RunIP (Ptr<Node> n, std::ostringstream* ss) {
-  std::string cmdStr = ss->str ();
-  LinuxStackHelper::RunIp (n, Seconds (0.001), cmdStr.c_str ());
-  ss->str ("");
-  
-  LogParam ("Run IP", cmdStr);
-}
-
-void RunIP (Ptr<Node> n, std::string cmd) {
-  LinuxStackHelper::RunIp (n, Seconds (0.001), cmd.c_str ());
-
-  LogParam ("Run IP", cmd);
-}
-
-void AddDceGateway (Ptr<Node> n, Ipv4Address addr) { 
-  LogHeader ("Running IP to create gateway at node", n->GetId ());
-  
-  std::ostringstream cmd;
-  //cmd << "route add to 0.0.0.0/0.0.0.0 via " << addr;
-  cmd << "route add default via " << addr << " dev sim0";
-    
-  // VER1: route add default via 2.1.0.2 dev sim0
-  // VER2: route add to 0.0.0.0/0.0.0.0 via 1.0.0.1
-
-  RunIP (n, "link set lo up"); 
-  RunIP (n, &cmd);  
-}
-
-void AddDceRoute (Ptr<Node> n, Ipv4Address to, Ipv4Address via, int net) { 
-  LogHeader ("Running IP to create route", n->GetId ());
-  
-  std::ostringstream cmd;
-  cmd << "route add to " << to << "/" << net << " via " << via;
-  RunIP (n, "link set lo up"); 
-  RunIP (n, &cmd);  
-}
-
-void SetupDceNetworkStack (NodeContainer n, std::string prot, bool isRef) {
-  std::string netNextLib;
-  if(isRef){
-    netNextLib = GetDceRefLibrary ();  
-  }
-  else{
-    netNextLib = GetDceLibrary ();
-  }	
-  std::string tcpMemSize = "768174 10242330 245815680";
-  std::string rmemSize = "4096 87380 245815680";
-  std::string wmemSize = "4096 87380 245815680";
-  std::string memorySize = "245815680";
-  std::string maxSegSize = "1300";
-  DceManagerHelper dce;
-  LinuxStackHelper stack;
-  
-  dce.SetTaskManagerAttribute ("FiberManagerType", StringValue ("UcontextFiberManager"));
-  dce.SetNetworkStack ("ns3::LinuxSocketFdFactory", "Library", StringValue (netNextLib));
-  dce.Install (n);
-  stack.Install (n); 
-  
-  //stack.SysctlSet (n, ".net.ipv4.tcp_allowed_congestion_control", prot);
-  stack.SysctlSet (n, ".net.ipv4.tcp_congestion_control", prot);
-  stack.SysctlSet (n, ".net.ipv4.tcp_app_win", maxSegSize); 
-  stack.SysctlSet (n, ".net.ipv4.tcp_rmem", rmemSize); 
-  stack.SysctlSet (n, ".net.ipv4.tcp_wmem", wmemSize); 
-  stack.SysctlSet (n, ".net.ipv4.tcp_mem",  tcpMemSize);
-  stack.SysctlSet (n, ".net.ipv4.tcp_timestamps",  "1");
-  stack.SysctlSet (n, ".net.ipv4.tcp_no_metrics_save", "1");
-  stack.SysctlSet (n, ".net.core.rmem_default", memorySize);
-  stack.SysctlSet (n, ".net.core.rmem_max",     memorySize);
-  stack.SysctlSet (n, ".net.core.wmem_default", memorySize);
-  stack.SysctlSet (n, ".net.core.wmem_max",     memorySize);
-  
-  LogHeader ("Setting up DCE network stack");  
-  for (uint32_t i; i < n.GetN (); i++) {
-    LogParam ("At node", n.Get(i)->GetId ()); 
-  } 
-  LogParam ("Library", netNextLib);
-  LogParam ("RMEM memeory size", rmemSize);
-  LogParam ("WMEM memeory size", wmemSize);
-  LogParam ("TCP memeory size", tcpMemSize);
-  LogParam ("Memory size", memorySize);
-  LogParam ("Maximum segment size", maxSegSize);
-  LogParam ("DCE node protocol", prot);
-  LogParam ("Reference stack", isRef);
-}
-
-void SetupUeDceNetworkStack (NodeContainer n) {
-  std::string netNextLib = GetDceRefLibrary ();  	
-  std::string tcpMemSize = "768174 10242330 245815680";
-  std::string rmemSize = "4096 87380 245815680";
-  std::string wmemSize = "4096 87380 245815680";
-  std::string memorySize = "245815680";
-  std::string maxSegSize = "1300";
-  DceManagerHelper dce;
-  LinuxStackHelper stack;
-  
-  dce.SetTaskManagerAttribute ("FiberManagerType", StringValue ("UcontextFiberManager"));
-  dce.SetNetworkStack ("ns3::LinuxSocketFdFactory", "Library", StringValue (netNextLib));
-  dce.Install (n);
-  stack.Install (n); 
-  
-  //stack.SysctlSet (n, ".net.ipv4.tcp_allowed_congestion_control", prot);
-  //stack.SysctlSet (n, ".net.ipv4.tcp_congestion_control", prot);
-  stack.SysctlSet (n, ".net.ipv4.tcp_app_win", maxSegSize); 
-  stack.SysctlSet (n, ".net.ipv4.tcp_rmem", rmemSize); 
-  stack.SysctlSet (n, ".net.ipv4.tcp_wmem", wmemSize); 
-  stack.SysctlSet (n, ".net.ipv4.tcp_mem",  tcpMemSize);
-  stack.SysctlSet (n, ".net.ipv4.tcp_timestamps",  "1");
-  stack.SysctlSet (n, ".net.core.rmem_default", memorySize);
-  stack.SysctlSet (n, ".net.core.rmem_max",     memorySize);
-  stack.SysctlSet (n, ".net.core.wmem_default", memorySize);
-  stack.SysctlSet (n, ".net.core.wmem_max",     memorySize);
-  
-  LogHeader ("Setting up DCE network stack");  
-  for (uint32_t i; i < n.GetN (); i++) {
-    LogParam ("At node", n.Get(i)->GetId ()); 
-  } 
-  LogParam ("Library", netNextLib);
-  LogParam ("RMEM memeory size", rmemSize);
-  LogParam ("WMEM memeory size", wmemSize);
-  LogParam ("TCP memeory size", tcpMemSize);
-  LogParam ("Memory size", memorySize);
-  LogParam ("Maximum segment size", maxSegSize);
-  //LogParam ("DCE node protocol", prot);
-}
-
-#else //================================================================
-
-void AddDceGateway (Ptr<Node> node, Ipv4Address addr) { 
-}
-
-void AddDceRoute (Ptr<Node> node, Ipv4Address to, Ipv4Address via) { 
-}
-
-void SetupDcePaths () { 
-}
-
-void SetupDceProtocol (Ptr<Node> node, std::string prot) {
-}
-
-void SetupDceNetworkStack (NodeContainer n) {
-}
-
-#endif //===> End of DCE section <======================================
-
-//======================================================================
 //===> Network section <================================================
 
 #ifdef SCRIPT_SECTION
@@ -985,11 +788,9 @@ void LinkNodes (const LinkConfig &c, LinkHolder* h) {
   p2p.SetDeviceAttribute ("Mtu", UintegerValue (c.m_mtu));
   p2p.SetChannelAttribute ("Delay", TimeValue (Seconds (c.m_delay)));
   //p2p.SetQueue ("ns3::DropTailQueue", "MaxPackets", UintegerValue(20000));
-  //p2p.SetQueue ("ns3::DropTailQueue<Packet>", "MaxSize", QueueSizeValue (QueueSize ("20000p")));
+  p2p.SetQueue ("ns3::DropTailQueue<Packet>", "MaxSize", QueueSizeValue (QueueSize ("20000p")));
   h->m_devs = p2p.Install (h->m_node1, h->m_node2);
   //KZS
-  //Ptr<PointToPointNetDevice> pepDevice = DynamicCast<PointToPointNetDevice> (h->m_devs.Get(0));
-  //pepDevice->SetPep(true);
   Ipv4AddressHelper ipv4;
   ipv4.SetBase (c.m_netAddr.c_str (), c.m_netMask.c_str ());
   h->m_intfs = ipv4.Assign (h->m_devs);
@@ -1051,26 +852,14 @@ void SetupNs3UdpApp (const AppConfig &c, AppHolder *h) {
   LogParam ("Client port", c.m_clientPort);
 }
 
-
-
 void SetupNs3TcpApp (const AppConfig &c, AppHolder *h, const ScriptConfig &sc, std::string id) {
   //Address sinkAddress (InetSocketAddress (ueIpIface.GetAddress (0), sinkPort));
   Ptr<Socket> ns3TcpSocket = Socket::CreateSocket (h->m_server, TcpSocketFactory::GetTypeId ());
-
-  //Bulkdsend app
-  /*ObjectFactory m_factory;
-  m_factory.SetTypeId ("ns3::BulkSendApplicationCustomSocket");
-  m_factory.Set ("Protocol", StringValue ("ns3::TcpSocketFactory"));
-  m_factory.Set ("Remote", AddressValue (InetSocketAddress (c.m_clientAddr, c.m_clientPort)));
-  Ptr<BulkSendApplicationCustomSocket> source = m_factory.Create<BulkSendApplicationCustomSocket> ();
-  source->SetSocket (ns3TcpSocket);*/
 
   //Timed send app
   Ptr<MyApp> source = CreateObject<MyApp> ();
   source->Setup (ns3TcpSocket, InetSocketAddress(c.m_clientAddr, c.m_clientPort), 1400, 5000000, DataRate ("2500Mb/s"));
 
-  //BulkSendHelper source ("ns3::TcpSocketFactory", InetSocketAddress (c.m_clientAddr, c.m_clientPort));
-  //source.SetAttribute ("MaxBytes", UintegerValue (0)); //1e9
   h->m_server->AddApplication (source);
   h->m_serverApps.Add (source);
   h->m_serverApps.Start (Seconds (0.02));
@@ -1099,27 +888,6 @@ void SetupNs3TcpApp (const AppConfig &c, AppHolder *h, const ScriptConfig &sc, s
   LogParam ("Client address", c.m_clientAddr);
   LogParam ("Client port", c.m_clientPort);
 }
-
-/*
-
-void SetupNs3TcpApp (const AppConfig &c, AppHolder *h) {
-  BulkSendHelper source ("ns3::TcpSocketFactory", InetSocketAddress (c.m_clientAddr, c.m_clientPort));
-  source.SetAttribute ("MaxBytes", UintegerValue (1e9));
-  h->m_serverApps.Add (source.Install (h->m_server));
-  h->m_serverApps.Start (Seconds (0.02));
-
-  PacketSinkHelper sink ("ns3::TcpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), c.m_clientPort));
-  h->m_clientApps.Add (sink.Install (h->m_client));
-  h->m_clientApps.Start (Seconds (0.01));
-  
-  LogHeader ("Bulk TCP application created");
-  LogParam ("Server node", h->m_server->GetId ());
-  LogParam ("Client node", h->m_client->GetId ());
-  LogParam ("Client address", c.m_clientAddr);
-  LogParam ("Client port", c.m_clientPort);
-}
-
-*/
 
 void FlipTxDirection (AppConfig *c, AppHolder *h) {
   Ptr<Node> newServer = h->m_client;
@@ -1212,7 +980,6 @@ int main (int argc, char *argv[]) {
   GlobalValue::Bind ("ChecksumEnabled", BooleanValue (true));
   
   //KZS
-  //SetupDcePaths ();
   AddObstacles (c);
   for (uint32_t i = 0; i < h.m_enbNodes.GetN (); i++) {
     SetupEnbMobility (c, h.m_enbNodes.Get (i));
@@ -1226,10 +993,10 @@ int main (int argc, char *argv[]) {
   h.m_ueDevs = h.m_mmwHelper->InstallUeDevice (h.m_ueNodes);
 
   for (uint32_t i = 0; i < h.m_ueDevs.GetN (); i++) {
-    TraceMmwUe (c, h.m_ueDevs.Get (i), "00-at-ue-" + IntToStr (i));
+    //TraceMmwUe (c, h.m_ueDevs.Get (i), "00-at-ue-" + IntToStr (i));
   }
   for (uint32_t i = 0; i < h.m_enbDevs.GetN (); i++) {
-    TraceMmwEnb (c, h.m_enbDevs.Get (i), "01-at-enb-" + IntToStr (i));
+    //TraceMmwEnb (c, h.m_enbDevs.Get (i), "01-at-enb-" + IntToStr (i));
   }
 
   SetupNs3NetworkStack (h.m_srvNodes);
@@ -1253,8 +1020,8 @@ int main (int argc, char *argv[]) {
     linkHolder.m_node1 = h.m_pgwNode;
     linkHolder.m_node2 = srv;
     LinkNodes (linkConfig, &linkHolder);
-    TraceLink (c, linkHolder.m_devs.Get(0), "03-at-pgw-" + IntToStr (i));
-    TraceLink (c, linkHolder.m_devs.Get(1), "04-at-srv-" + IntToStr (i));
+    //TraceLink (c, linkHolder.m_devs.Get(0), "03-at-pgw-" + IntToStr (i));
+    //TraceLink (c, linkHolder.m_devs.Get(1), "04-at-srv-" + IntToStr (i));
    
     AppConfig appConfig;
     appConfig.m_startTime = 0.0;
@@ -1284,18 +1051,6 @@ int main (int argc, char *argv[]) {
 
 #endif //===> End of main section <=====================================
 
-//======================================================================
-//===> Examples <=======================================================
-
-#ifdef SCRIPT_SECTION
- 
-/*
-
-./waf --run "test-mmw --dce=true"
-
-*/
-
-#endif //===> End of example section <==================================
 
 //======================================================================
 //===> Script end <=====================================================
