@@ -1,3 +1,12 @@
+This is a fork of https://github.com/nyuwireless-unipd/ns3-mmwave at 942619d16ac0b806ad3a9dae3b8a9c629312a484 commit.
+
+## Configure and Compile
+  
+  /waf configure --build-profile=optimized --disable-python --enable-example --disable-werror && ./waf build
+
+
+Original Readme:
+
 ## Warning: work in progress branch
 We are actively developing this branch and pushing new features, please use the new-handover branch until further notice.
 
