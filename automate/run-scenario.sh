@@ -67,3 +67,5 @@ do
   echo "seed=$seed run finished"
   seed=$(($seed+1))
 done
+
+python plot.py
