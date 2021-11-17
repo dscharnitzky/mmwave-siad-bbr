@@ -1,3 +1,14 @@
+This is a fork of https://github.com/nyuwireless-unipd/ns3-mmwave at 942619d16ac0b806ad3a9dae3b8a9c629312a484 commit.
+
+We have added the Internet module from ns3 3.35 version, added TCP SIAD and some simple measurement scripts in automate/
+
+## Configure and Compile
+  
+  ./waf configure --build-profile=optimized --disable-python --enable-example --disable-werror && ./waf build
+
+
+Original Readme:
+
 ## Warning: work in progress branch
 We are actively developing this branch and pushing new features, please use the new-handover branch until further notice.
 
