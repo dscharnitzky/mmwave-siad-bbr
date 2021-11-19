@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-for i in range(1, 30, 2):
+for i in range(1, 31, 2):
 	#read data for BBR throughput
 	tp_x_bbr = []
 	tp_y_bbr = []

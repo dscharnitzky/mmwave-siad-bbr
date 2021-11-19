@@ -7,14 +7,14 @@ dirnum=1
 target=$(($seed+5))
 while [ $seed -lt $target ]
 do
-  ./waf --run "scratch/test-mmw --ccProt=TcpBbr --seed=$seed --lteBuff=2000000" 
+  ./waf --run "scratch/test-mmw --ccProt=TcpBbr --seed=$seed --lteBuff=4000000" 
   cd automate
   python processdata.py
   cd ..
   mv traces/test traces/$dirnum
   dirnum=$(($dirnum+1))
 
-  ./waf --run "scratch/test-mmw --ccProt=TcpSiad --seed=$seed --lteBuff=2000000" 
+  ./waf --run "scratch/test-mmw --ccProt=TcpSiad --seed=$seed --lteBuff=4000000" 
   cd automate
   python processdata.py
   cd ..
@@ -68,4 +68,6 @@ do
   seed=$(($seed+1))
 done
 
+cd automate
 python plot.py
+pyrhon calc.py
